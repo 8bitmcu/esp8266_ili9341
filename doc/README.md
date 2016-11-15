@@ -14,14 +14,14 @@ The lack of official documentation on the chip is quite a bummer. Because of tha
 My WeMos D1 Mini also gave me issues with esptool.py, but thankfully [using a different baud rate](https://www.reddit.com/r/esp8266/comments/4ga2tv/wemos_d1_mini_connection_issues_on_osx_1011/) seemed to solve the issue for me.
 
 
-![alt text](doc/adafruit.png "Adafruit startup routine")
+![alt text](adafruit.png "Adafruit startup routine")
 Adafruits original startup routine, as captured by Saleae Logic. Surprisingly, a lot of time spent in-between SPI transactions!
 
-![alt text](doc/optimized.png "Optimized startup routine")
+![alt text](optimized.png "Optimized startup routine")
 Somewhat optimized routine, ommitting the CS signal as shown optional by the datasheet. Also showing 24-bit SPI transactions.
 
 
-![alt text](doc/ili9341.png "ILI9341 Serial protocol")
+![alt text](ili9341.png "ILI9341 Serial protocol")
 Since SDA/SLC are handled by the SPI library (CS too, turns out!), we only need to make sure DC is LOW during commands, and HIGH during data transfers. Optionally CS can be kept LOW during larger transfers.
 
 
