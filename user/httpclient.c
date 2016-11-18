@@ -2,63 +2,72 @@
 
 
 
-static err_t ICACHE_FLASH_ATTR
-httpclient_sent(void *arg, struct tcp_pcb *pcb, u16_t len) {
-    os_printf("sent");
+
+
+
+void httpclient_readall(char **pdata, struct httpreq* req) {
+
+    *pdata = (char *)os_zalloc(req->p->tot_len + 1);
+    pbuf_copy_partial(req->p, *pdata, req->p->tot_len, 0);
+
+    pbuf_free(req->p);
+    tcp_close(req->pcb);
+}
+
+uint32_t httpclient_read(char *pdata, struct httpreq* req, uint32_t size) {
+
+    // what's left to be read
+    uint32_t data_left = req->res_size - req->reader;
+
+    // if trying to read more than what's available
+    if(size > data_left) 
+        size = data_left;
+
+    // if nothing left
+    if(!size) {
+        pbuf_free(req->p);
+        tcp_close(req->pcb);
+        return 0;
+    }
+
+    os_memcpy(pdata, (char *) req->p->payload + req->reader, size);
+    
+    pdata[size] = '\0';
+
+    // increment reader by amount read
+    req->reader += size;
+
+    return size;
 }
 
 
 
 
 
-static err_t ICACHE_FLASH_ATTR
-httpclient_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
-    os_printf("recv");
+bool httpclient_request(struct httpreq* req) {
+
+    os_printf("Request to %d.%d.%d.%d:%d\n", req->ip[0], req->ip[1], req->ip[2], req->ip[3], req->port);
 
 
-    // blocking
-    /*
-	char *pdata = NULL;
-	u16_t length = 0;
-	pdata = (char *)os_zalloc(p->tot_len + 1);
-    length = pbuf_copy_partial(p, pdata, p ->tot_len, 0);
-    pbuf_free(p);
+    ip_addr_t addr;
+    IP4_ADDR(&addr, req->ip[0], req->ip[1], req->ip[2], req->ip[3]);
 
-    os_printf(pdata);
+    struct tcp_pcb* pcb = tcp_new();
+    if (!pcb) {
+        os_printf("pcb is NULL");
+        return 0;
+    }
 
-    tcp_close(pcb);
-    */
+    tcp_arg(pcb, req);
+    tcp_err(pcb, httpclient_err);
 
-
-    // async
-	char *pdata = NULL;
-	u16_t qp = (p->tot_len / 4);
-
-	pdata = (char *)os_zalloc(qp + 1);
-
-
-	os_memcpy(pdata, p->payload, qp);
-    os_printf(pdata);
-
-
-	os_memcpy(pdata, p->payload + qp, qp);
-    os_printf(pdata);
-
-
-	os_memcpy(pdata, p->payload + (qp*2), qp);
-    os_printf(pdata);
-
-
-	os_memcpy(pdata, p->payload + (qp*3), qp);
-    os_printf(pdata);
-
-
-
-
-
-    pbuf_free(p);
-    tcp_close(pcb);
+    tcp_bind(pcb, IP_ADDR_ANY, req->port);
+    tcp_connect(pcb, &addr, req->port, httpclient_connected);
 }
+
+
+
+
 
 
 
@@ -66,16 +75,18 @@ httpclient_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
 static err_t ICACHE_FLASH_ATTR
 httpclient_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
 
-    char *string = "GET / HTTP/1.1\r\nHost: 192.168.0.11\r\n\r\n";
-
-    espconn_printf("espconn_client_connect pcon %p tpcb %p\n", arg, tpcb);
 
     if (err != ERR_OK) {
-        os_printf("err in host connected (%s)\n",lwip_strerr(err));
+        httpclient_err(tpcb, err);
         return err;
     }
 
-    tcp_sent(tpcb, httpclient_sent);
+
+    os_printf("Connected\n");
+    char *string = "GET / HTTP/1.1\r\nHost: 192.168.0.11\r\n\r\n";
+
+
+    //tcp_sent(tpcb, httpclient_sent);
     tcp_recv(tpcb, httpclient_recv);
 
 
@@ -84,21 +95,17 @@ httpclient_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
 
 
     err = tcp_write(tpcb, string, strlen(string), 0);
-
     if(err) {
-        os_printf("err in tcp_write (%s)\n",lwip_strerr(err));
+        httpclient_err(tpcb, err);
         return err;
     }
 
 
     err = tcp_output(tpcb);
-
     if(err) {
-        os_printf("err in tcp_output (%s)\n",lwip_strerr(err));
+        httpclient_err(tpcb, err);
         return err;
     }
-
-
 
     return err;
 }
@@ -109,36 +116,36 @@ httpclient_err(void *arg, err_t err) {
 
     struct tcp_pcb* pcb = arg;
 
-    espconn_printf("espconn_client_err %d %d %d\n", pcb->state, pcb->nrtx, err);
+    os_printf("lwip error (%s)\n",lwip_strerr(err));
+    os_printf("httpclient_err %d %d %d\n", pcb->state, pcb->nrtx, err);
 }
 
 
-bool httpclient_connect(uint8_t *ip, uint16_t port) {
+/*
+static err_t ICACHE_FLASH_ATTR
+httpclient_sent(void *arg, struct tcp_pcb *pcb, u16_t len) {
+    os_printf("sent");
+}
+*/
 
 
-    os_printf("Connect...");
 
-    ip_addr_t addr;
-    IP4_ADDR(&addr, ip[0], ip[1], ip[2], ip[3]);
 
-    struct tcp_pcb* pcb = tcp_new();
-    struct netif* interface = ip_route(&addr);
+static err_t ICACHE_FLASH_ATTR
+httpclient_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
 
-    if (!interface) {
-        os_printf("no route to host\r\n");
-        return 0;
+    struct httpreq* req = arg;
+
+    if(!req->res) {
+        os_printf("Got response\n");
+
+        req->res = true;
+        req->pcb = pcb;
+        req->p = p;
+
+        // response size
+        req->res_size = req->p->tot_len;
+
+        req->res_cb(arg);
     }
-
-    if (!pcb) {
-        os_printf("pcb is NULL");
-        return 0;
-    }
-
-    tcp_bind(pcb, IP_ADDR_ANY, port);
-
-    tcp_arg(pcb, pcb);
-    tcp_err(pcb, httpclient_err);
-
-    tcp_connect(pcb, &addr, port, httpclient_connected);
-
 }

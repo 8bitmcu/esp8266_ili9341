@@ -24,16 +24,28 @@ static void user_procTask(os_event_t *events);
 static volatile os_timer_t some_timer;
 
 
-
-void some_timerfunc(void *arg) {
-
-    // connect to client
-    uint8_t ip[4] = {192, 168, 0, 11};
-    httpclient_connect(ip, 80);
+void response_callback(struct httpreq* req) {
 
 
+    // read all data (example)
+/*
+    char *pdata = NULL;
+    httpclient_readall(&pdata, req);
 
-    os_delay_us(100*1000);
+    os_printf(pdata);
+*/
+
+
+    // read data in segments (example)
+
+    char *pdata[128];
+    uint16_t size_read;
+
+    while(size_read = httpclient_read(&pdata, req, 128)) {
+        os_printf(pdata);
+    }
+
+
 }
 
 
@@ -41,6 +53,44 @@ void some_timerfunc(void *arg) {
 static void ICACHE_FLASH_ATTR user_procTask(os_event_t *events) {
     os_delay_us(10);
 }
+
+
+
+void request() {
+
+    // create new httprequest
+    struct httpreq* req = (struct httpreq *)os_zalloc(sizeof(struct httpreq));
+
+    // set server ip
+    uint8_t ip[4] = {192, 168, 0, 11};
+    os_memcpy(req->ip, ip, 4);
+
+    // set port
+    req->port = 80;
+
+    // set response callback
+    req->res_cb = response_callback;
+
+    // send the request
+    httpclient_request(req);
+}
+
+
+bool runOnce = false;
+
+void some_timerfunc(void *arg) {
+
+    if(!runOnce) {
+        runOnce = true;
+        request();
+    }
+
+
+    os_delay_us(1000);
+}
+
+
+
 
 //Init function
 void ICACHE_FLASH_ATTR user_init() {
@@ -52,10 +102,7 @@ void ICACHE_FLASH_ATTR user_init() {
 
 
 
-
     // init WIFI
-
- 
     struct station_config stationConf; 
  
     wifi_set_opmode( 0x01 ); 
@@ -63,6 +110,7 @@ void ICACHE_FLASH_ATTR user_init() {
     os_memcpy(&stationConf.password, SSID_PWD, 32); 
     wifi_station_set_config(&stationConf); 
     wifi_station_connect(); 
+
 
 
 
