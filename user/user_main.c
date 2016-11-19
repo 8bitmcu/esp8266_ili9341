@@ -5,8 +5,8 @@
 #include "user_config.h"
 #include "uart.h"
 
-
 #define LWIP_OPEN_SRC
+//#define LWIP_DEBUG
 
 #include "user_interface.h"
 #include "httpclient.h"
@@ -29,31 +29,29 @@ void response_callback(struct httpreq* req) {
 
     // read all data (example)
 /*
-    char *pdata = NULL;
-    httpclient_readall(&pdata, req);
+    char *data = NULL;
 
-    os_printf(pdata);
+    httpclient_readall(&data, req);
+    os_printf(data);
+
+    os_free(data);
 */
 
 
     // read data in segments (example)
 
-    char *pdata[128];
+    char data[128];
     uint16_t size_read;
 
-    while(size_read = httpclient_read(&pdata, req, 128)) {
-        os_printf(pdata);
+    while(size_read = httpclient_read(data, req, 128)) {
+        os_printf(data);
     }
 
-
 }
 
-
-//Do nothing function
-static void ICACHE_FLASH_ATTR user_procTask(os_event_t *events) {
-    os_delay_us(10);
+void errr_callback(err_t err) {
+    os_printf("lwip error %s", http_errstr(err));
 }
-
 
 
 void request() {
@@ -68,8 +66,14 @@ void request() {
     // set port
     req->port = 80;
 
+    // set path to query
+    req->path = "/";
+
     // set response callback
     req->res_cb = response_callback;
+
+    // set error callback
+    req->err_cb = errr_callback;
 
     // send the request
     httpclient_request(req);
@@ -91,9 +95,16 @@ void some_timerfunc(void *arg) {
 
 
 
+//Do nothing function
+static void ICACHE_FLASH_ATTR 
+user_procTask(os_event_t *events) {
+    os_delay_us(10);
+}
+
 
 //Init function
-void ICACHE_FLASH_ATTR user_init() {
+void ICACHE_FLASH_ATTR 
+user_init() {
 
     // Initialize the GPIO subsystem.
     gpio_init();
