@@ -22,8 +22,9 @@ FW_BASE		= firmware
 SDK_BASE	?= /home/aga/esp-open-sdk/sdk
 
 # esptool.py path and port
-ESPTOOL		?= python /home/aga/esp-open-sdk/esptool/esptool.py -b 460800
 ESPPORT		?= /dev/ttyUSB0
+BAUD		?= 460800
+ESPTOOL		?= python /home/aga/esp-open-sdk/esptool/esptool.py -b $(BAUD)
 
 # name for the target project
 TARGET		= app
@@ -127,7 +128,15 @@ $(FW_BASE):
 	$(Q) mkdir -p $@
 
 flash: $(FW_FILE_1) $(FW_FILE_2)
-	sudo $(ESPTOOL) --port $(ESPPORT) write_flash $(FW_FILE_1_ADDR) $(FW_FILE_1) $(FW_FILE_2_ADDR) $(FW_FILE_2)
+	$(ESPTOOL) --port $(ESPPORT) write_flash $(FW_FILE_1_ADDR) $(FW_FILE_1) $(FW_FILE_2_ADDR) $(FW_FILE_2)
+
+debug:
+	# CTRL+D & CTRL+A to detach and exit
+	screen -S esp8266 $(ESPPORT) $(BAUD)
+
+	# safely close serial connection
+	screen -X -S esp8266 detach
+	screen -X -S esp8266 quit
 
 clean:
 	$(Q) rm -rf $(FW_BASE) $(BUILD_BASE)
