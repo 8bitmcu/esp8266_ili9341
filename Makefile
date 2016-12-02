@@ -132,7 +132,7 @@ flash: $(FW_FILE_1) $(FW_FILE_2)
 
 debug:
 	# CTRL+D & CTRL+A to detach and exit
-	screen -S esp8266 $(ESPPORT) $(BAUD)
+	screen -S esp8266 $(ESPPORT) 9600
 
 	# safely close serial connection
 	screen -X -S esp8266 detach

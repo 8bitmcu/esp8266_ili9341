@@ -24,30 +24,13 @@ static void user_procTask(os_event_t *events);
 static volatile os_timer_t some_timer;
 
 
-void response_callback(struct httpreq* req) {
 
 
-    // read all data (example)
-/*
-    char *data = NULL;
-
-    httpclient_readall(&data, req);
-    os_printf(data);
-
-    os_free(data);
-*/
-
-
-    // read data in segments (example)
-
-    char data[128];
-    uint16_t size_read;
-
-    while(size_read = httpclient_read(data, req, 128)) {
-        os_printf(data);
-    }
-
+void response_callback(struct httpreq* req, char* data, uint16_t len) {
+    os_printf(data, len);
 }
+
+
 
 void errr_callback(err_t err) {
     os_printf("lwip error %s", http_errstr(err));
@@ -60,14 +43,19 @@ void request() {
     struct httpreq* req = (struct httpreq *)os_zalloc(sizeof(struct httpreq));
 
     // set server ip
-    uint8_t ip[4] = {192, 168, 0, 11};
+    //uint8_t ip[4] = {192, 168, 0, 11};
+    
+    //httpbin.org
+    uint8_t ip[4] = {54, 175, 219, 8};
+
+
     os_memcpy(req->ip, ip, 4);
 
     // set port
     req->port = 80;
 
     // set path to query
-    req->path = "/";
+    req->path = "/encoding/utf8";
 
     // set response callback
     req->res_cb = response_callback;

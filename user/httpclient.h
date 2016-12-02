@@ -25,6 +25,11 @@
 // Didn't seem to be accessible even with LWIP_DEBUG enabled
 // (maybe because it's linked instead of compiled?)
 
+// defining my own errors
+#define ERR_PCBNULL -16
+#define ERR_RESCB -17
+
+
 static const char *httperr[] = {
 	"Ok.",                    /* ERR_OK          0  */
 	"Out of memory error.",   /* ERR_MEM        -1  */
@@ -44,15 +49,20 @@ static const char *httperr[] = {
 	"Already connected.",     /* ERR_ISCONN     -15 */
 
 	"pcb is NULL.",
+	"httpreq->res_cb is NULL.",
 };
+
+
+
+
 
 
 struct httpreq;
 
 
 // callback prototypes
-typedef void (* res_callback)(struct httpreq* req);
 typedef void (* err_callback)(err_t err);
+typedef void (* res_callback)(struct httpreq* req, char* data, uint16_t len);
 
 
 struct httpreq {
@@ -67,42 +77,13 @@ struct httpreq {
 	char* path;
 
 
-	// has received response yet?
-	bool res; 
-
 	// fn to get called when a response is received
     res_callback res_cb;
 
     // fn to get called when an error occur
     err_callback err_cb;
-
-
-
-
-    /* Response Data */
-
-
-	// tcp protocol control block
-	struct tcp_pcb *pcb;
-
-	// response data buffer
-	struct pbuf *p;
-
-	// response size (bytes)
-	uint32_t res_size;
-
-	// bytes read from *p
-	uint32_t bytes_read;
-
 };
 
-
-
-// read the whole response into *data
-void httpclient_readall(char **data, struct httpreq* req);
-
-// read an amount of bytes into *data specified by size
-uint32_t httpclient_read(char *data, struct httpreq* req, uint32_t size);
 
 // send a (GET) request to a server specified by strct httpreq
 err_t httpclient_request(struct httpreq* req);
@@ -122,6 +103,10 @@ httpclient_tcp_err(void *arg, err_t err);
 // tcp packet received callback
 static err_t ICACHE_FLASH_ATTR
 httpclient_tcp_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err);
+
+static err_t ICACHE_FLASH_ATTR
+httpclient_tcp_poll(void *arg, struct tcp_pcb *pcb);
+
 
 
 
