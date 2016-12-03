@@ -88,6 +88,7 @@ struct httpreq {
 // send a (GET) request to a server specified by strct httpreq
 err_t httpclient_request(struct httpreq* req);
 
+
 // converts an error code to a readable char*
 const char* http_errstr(err_t err);
 
@@ -96,17 +97,23 @@ const char* http_errstr(err_t err);
 static err_t ICACHE_FLASH_ATTR
 httpclient_tcp_connected(void *arg, struct tcp_pcb *tpcb, err_t err);
 
+
 // tcp error callback
 static void ICACHE_FLASH_ATTR
 httpclient_tcp_err(void *arg, err_t err);
+
 
 // tcp packet received callback
 static err_t ICACHE_FLASH_ATTR
 httpclient_tcp_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err);
 
-static err_t ICACHE_FLASH_ATTR
-httpclient_tcp_poll(void *arg, struct tcp_pcb *pcb);
 
+
+
+
+
+char* ICACHE_FLASH_ATTR
+httpclient_getbodyptr(char* str);
 
 
 

@@ -97,5 +97,11 @@
 
   void fillScreen(uint16 color);
 
+  void write32(uint32_t* data, uint16_t len);
+
+  void write8(char* data, uint16_t len);
+
+  void setWrite();
+
 
 #endif

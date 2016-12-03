@@ -124,12 +124,8 @@ httpclient_tcp_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
 
     struct httpreq* req = arg;
 
-    // p not NULL, confirm received
-    if (p != NULL) {
-        tcp_recved(pcb, p->len);
-    }
-    else {
-        // p is NULL, close tcp connection
+    // p is NULL, close tcp connection
+    if(p == NULL) {        
         err_t err = tcp_close(pcb);
 
         if(err) {
@@ -154,14 +150,41 @@ httpclient_tcp_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
 
     data = (char *)os_zalloc(p->len + 1);
     len = pbuf_copy_partial(p, data, p->len, 0);
-    pbuf_free(p);
-
+    
     // send data to response cb
     if (len) {
         req->res_cb(req, data, len);
     }
+
+
+    tcp_recved(pcb, p->len);
+
+    pbuf_free(p);
     os_free(data);
 
 
     return err;
+}
+
+
+/**************************************
+ ******* Utilities Functions **********
+ **************************************/
+
+
+
+// Returns a pointer to the first character of the response body
+// (Looks for and skips CRLFCRLF)
+char* ICACHE_FLASH_ATTR
+httpclient_getbodyptr(char* str) {
+    char *ptr = str;
+
+    // forward ptr two chars after CR and check for another CR
+    // (CRLF CRLF indicates headers end)
+    while(*ptr != '\r') {
+        ptr = strchr(ptr, '\r') + 2;
+    }
+
+    // return two chars ahead, since ptr points to the second CR
+    return ptr+2;
 }

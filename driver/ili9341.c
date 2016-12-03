@@ -100,58 +100,26 @@ void spiCommandData(uint8 cmd, uint32 data, uint8 len) {
   spi_transaction(HSPI, 0, 0, 0, 0, len, data, 0, 0);
 }
 
-/*
-// len in bits
-void spiCommandLgData(uint8 cmd, uint16* data, uint8 len) {
-
-  if(cmd) {
-    // _dc low
-    os_delay_us(1);
-    GPIO_OUTPUT_SET(_dc, 0);
-
-    // send 8 bit command through SPI
-    spi_tx8(HSPI, cmd);
-
-    os_delay_us(8);
-  }
-
-  // if no data return
-  if(!len) return;
-
-  // _dc high
-  GPIO_OUTPUT_SET(_dc, 1);
-
-
-
-  // disable MOSI, MISO, ADDR, COMMAND, DUMMY in case previously set.
-  CLEAR_PERI_REG_MASK(SPI_USER(HSPI), SPI_USR_MOSI|SPI_USR_MISO|SPI_USR_COMMAND|SPI_USR_ADDR|SPI_USR_DUMMY);
-
-  // setup bitlenghts
-  WRITE_PERI_REG(SPI_USER1(HSPI), ((-1)&SPI_USR_MOSI_BITLEN)<<SPI_USR_MOSI_BITLEN_S);
-
-  // enable MOSI function in SPI module
-  SET_PERI_REG_MASK(SPI_USER(HSPI), SPI_USR_MOSI);
-
-  uint8 i = (len/8) + (len%8)>0?1:0;
-  // set registers from data
-
-
-  while(i--)
-    WRITE_PERI_REG((REG_SPI_BASE(HSPI) + 0x40 + (i*4)), data[i]);
-
-  // spi transaction
-  SET_PERI_REG_MASK(SPI_CMD(HSPI), SPI_USR);
-
-}
-*/
-
-
-
 
 
 void fillScreen(uint16_t color) {
 
-  uint32_t d = ((uint32_t) color) | (((uint32_t) color) << 16);
+  setWrite();
+
+  // bytes to transfer (width*height*2 = total bytes) / 64 (spi transaction)
+  uint32_t loop = (ILI9340_TFTWIDTH * ILI9340_TFTHEIGHT / 32);
+
+  uint32_t c = ((uint32_t) color) | (((uint32_t) color) << 16);
+
+  uint32_t data[16] = {c, c, c, c, c, c, c, c, c, c, c, c, c, c, c, c};
+
+  while(loop-- > 0) {
+    write32(data, 16);
+  }
+}
+
+
+void setWrite() {
 
   // write to entire screen
   spiCommandData(ILI9340_CASET, 0xEF, 32);
@@ -172,35 +140,61 @@ void fillScreen(uint16_t color) {
 
   // enable MOSI function in SPI module
   SET_PERI_REG_MASK(SPI_USER(HSPI), SPI_USR_MOSI);
+}
 
-  // bytes to transfer (width*height*2 = total bytes) / 64 (spi transaction)
-  uint32_t loop = (ILI9340_TFTWIDTH * ILI9340_TFTHEIGHT / 32);
 
-  while(loop-- > 0) {
 
-    // wait for SPI to be ready
-    while(spi_busy(HSPI));
+void write32(uint32_t* data, uint16_t len) {
+  //TODO: this fn will fail if len isn't 16, as the registers are set for max capacity
 
-    // copy data to W0-W15 (16 * 32-bit = 64 bytes)
-    WRITE_PERI_REG(SPI_W0(HSPI), d);
-    WRITE_PERI_REG(SPI_W1(HSPI), d);
-    WRITE_PERI_REG(SPI_W2(HSPI), d);
-    WRITE_PERI_REG(SPI_W3(HSPI), d);
-    WRITE_PERI_REG(SPI_W4(HSPI), d);
-    WRITE_PERI_REG(SPI_W5(HSPI), d);
-    WRITE_PERI_REG(SPI_W6(HSPI), d);
-    WRITE_PERI_REG(SPI_W7(HSPI), d);
-    WRITE_PERI_REG(SPI_W8(HSPI), d);
-    WRITE_PERI_REG(SPI_W9(HSPI), d);
-    WRITE_PERI_REG(SPI_W10(HSPI), d);
-    WRITE_PERI_REG(SPI_W11(HSPI), d);
-    WRITE_PERI_REG(SPI_W12(HSPI), d);
-    WRITE_PERI_REG(SPI_W13(HSPI), d);
-    WRITE_PERI_REG(SPI_W14(HSPI), d);
-    WRITE_PERI_REG(SPI_W15(HSPI), d);
 
-    // spi transaction
-    SET_PERI_REG_MASK(SPI_CMD(HSPI), SPI_USR);
+  // wait for SPI to be ready
+  while(spi_busy(HSPI));
+
+  // iterator for regiters W0-W15, counts by 4 (32-bit)
+  uint8_t spiptr = 0;
+
+  // copy data to W0-W15 (16 * 32-bit = 64 bytes)
+  while(len--) {
+    WRITE_PERI_REG(SPI_W0(HSPI)+spiptr, *data++);
+    spiptr+=4;
   }
 
+  // spi transaction
+  SET_PERI_REG_MASK(SPI_CMD(HSPI), SPI_USR);
+}
+
+
+
+
+void write8(char* data, uint16_t len) {
+  char* dataptr = data;
+  //TODO: this fn will fail if len isn't 16, as the registers are set for max capacity
+
+
+  // wait for SPI to be ready
+  while(spi_busy(HSPI));
+
+  // iterator for regiters W0-W15, counts by 4 (32-bit)
+  uint8_t spiptr = 0;
+
+
+  uint8_t spiitr = len / 4;
+
+  // 32 bit register value
+  uint32_t val;
+
+
+  // copy data to W0-W15 (16 * 32-bit = 64 bytes)
+  while(spiitr--) {
+
+    val = (((((uint32_t) *dataptr++) << 24) | (((uint32_t) *dataptr++) << 16)) | (((uint32_t) *dataptr++) << 8)) | ((uint32_t) *dataptr++);
+
+
+    WRITE_PERI_REG(SPI_W0(HSPI)+spiptr, val);
+    spiptr+=4;
+  }
+
+  // spi transaction
+  SET_PERI_REG_MASK(SPI_CMD(HSPI), SPI_USR);
 }
