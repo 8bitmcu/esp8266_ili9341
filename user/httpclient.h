@@ -5,8 +5,6 @@
 #define LWIP_OPEN_SRC
 //#define LWIP_DEBUG
 
-#include "user_interface.h"
-
 #include "lwip/opt.h"
 #include "lwip/ip.h"
 #include "lwip/sockets.h"
@@ -114,7 +112,6 @@ httpclient_tcp_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err);
 
 char* ICACHE_FLASH_ATTR
 httpclient_getbodyptr(char* str);
-
 
 
 #endif

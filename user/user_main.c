@@ -28,10 +28,18 @@ static volatile os_timer_t some_timer;
 
 
 
+void uart_dequeue(char *data, uint16_t len) {
+    uint16_t i = 0;
+    while(i++ < len) {
+        os_printf("%X ",data[i]);
+    }
+    os_printf("\n");
+}
+
 
 char *outdata;
 struct queue_struct* b64queue;
-void b64_decode(char *data, uint16_t len) {
+void b64_dequeue(char *data, uint16_t len) {
 
     if(outdata == NULL) {
         // un-encoded needs 33% less data than b64 encoded
@@ -48,6 +56,7 @@ void b64_decode(char *data, uint16_t len) {
         b64queue = (struct queue_struct *)os_zalloc(sizeof(struct queue_struct));
         b64queue->tsize = 64;
         b64queue->dequeue = write8;
+        //b64queue->dequeue = uart_dequeue;
     }
 
     // queue data, gets written to LCD
@@ -67,6 +76,9 @@ void response_callback(struct httpreq* req, char* data, uint16_t len) {
         // essentially ignoring headers
         char *c = httpclient_getbodyptr(data);
 
+        // skip first 8 bytes (data info)
+        c += 8;
+
         // re-calculate data length without headers
         len = len - (c - data);
         data = c;
@@ -76,8 +88,8 @@ void response_callback(struct httpreq* req, char* data, uint16_t len) {
 
         // init queue
         pqueue = (struct queue_struct *)os_zalloc(sizeof(struct queue_struct));
-        pqueue->tsize = 160;
-        pqueue->dequeue = b64_decode;
+        pqueue->tsize = 256;
+        pqueue->dequeue = b64_dequeue;
 
         headers = true;
     }
@@ -95,18 +107,16 @@ void errr_callback(err_t err) {
 
 
 
-void request() {
+
+void some_timerfunc(void *arg) {
+    // reset global variable
+    headers = false;
 
     // create new httprequest
     struct httpreq* req = (struct httpreq *)os_zalloc(sizeof(struct httpreq));
 
     // set server ip 
-    uint8_t ip[4] = {192, 168, 0, 12}; 
-     
-    //httpbin.org 
-    //uint8_t ip[4] = {54, 175, 219, 8}; 
- 
- 
+    uint8_t ip[4] = {192, 168, 0, 12};
     os_memcpy(req->ip, ip, 4); 
 
     // set port
@@ -114,7 +124,7 @@ void request() {
 
     // set path to query
     req->path = "/bitmap?source=imgur"; 
-    //req->path = "/bitmap?source=local&url=green.png";
+    //req->path = "/bitmap?source=local&url=blue.png";
 
     // set response callback
     req->res_cb = response_callback;
@@ -127,39 +137,28 @@ void request() {
 }
 
 
-bool ranOnce = false;
 
-void some_timerfunc(void *arg) {
-    if(!ranOnce) {
-        ranOnce = true;
-        request();
-    }
-}
-
-
-
-//Do nothing function
+// do nothing function
 static void ICACHE_FLASH_ATTR 
 user_procTask(os_event_t *events) {
     os_delay_us(10);
 }
 
 
-
-
-
-//Init function
+// main user function
 void ICACHE_FLASH_ATTR 
 user_init() {
 
-    // Initialize the GPIO subsystem.
+    // initialize the GPIO subsystem.
     gpio_init();
 
-    ili_init(false); 
+    // init ili LCD
+    ili_init(true); 
 
-    // set upside down
+    // set LCD upside down (easier to dev from my desk, anyway)
     spiCommandData(ILI9340_MADCTL, ILI9340_MADCTL_MY | ILI9340_MADCTL_BGR, 8);
 
+    // fill LCD blue, so I know it's working
     fillScreen(ILI9340_BLUE);
 
     //uart_init(BIT_RATE_9600, BIT_RATE_9600);
@@ -167,7 +166,6 @@ user_init() {
 
     // init WIFI
     struct station_config stationConf; 
- 
     wifi_set_opmode( 0x01 ); 
     os_memcpy(&stationConf.ssid, SSID_NAME, 32); 
     os_memcpy(&stationConf.password, SSID_PWD, 32); 
@@ -178,18 +176,14 @@ user_init() {
 
 
 
-    //Disarm timer
+    // disarm timer
     os_timer_disarm(&some_timer);
-
-    //Setup timer
+    // setup timer
     os_timer_setfn(&some_timer, (os_timer_func_t *)some_timerfunc, NULL);
+    // arm the timer
+    os_timer_arm(&some_timer, 30000, 1);
 
-    //Arm the timer
-    //&some_timer is the pointer
-    //1000 is the fire time in ms
-    //0 for once and 1 for repeating
-    os_timer_arm(&some_timer, 10000, 1);
 
-    //Start os task
+    // start os task
     system_os_task(user_procTask, user_procTaskPrio,user_procTaskQueue, user_procTaskQueueLen);
 }
