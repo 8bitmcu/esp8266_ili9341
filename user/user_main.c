@@ -27,6 +27,40 @@ static void user_procTask(os_event_t *events);
 static volatile os_timer_t some_timer;
 
 
+#define SPI_FLASH_OFFSET 0x40000
+
+uint32_t spiflash_index = 0;
+
+// draw image from ROM
+void rom_draw() {
+    const uint16_t spi_t = 64;
+    uint32_t i = 0;
+    char data[spi_t];
+
+    while(i < spiflash_index) {
+        spi_flash_read(SPI_FLASH_OFFSET + i, (uint32 *) data, spi_t);
+        write8(data, spi_t);
+
+        i += spi_t;
+    }
+}
+
+
+
+void rom_dequeue(char *data, uint16_t len) {
+
+    // erase sector before writing to it
+    if(spiflash_index == 0 || spiflash_index % SPI_FLASH_SEC_SIZE == 0) {
+        spi_flash_erase_sector((SPI_FLASH_OFFSET + spiflash_index) / SPI_FLASH_SEC_SIZE);
+    }
+
+    // write to spi flash
+    spi_flash_write(SPI_FLASH_OFFSET + spiflash_index, (uint32 *) data, len);
+
+    // increment index
+    spiflash_index += len;
+}
+
 
 void uart_dequeue(char *data, uint16_t len) {
     uint16_t i = 0;
@@ -55,7 +89,8 @@ void b64_dequeue(char *data, uint16_t len) {
     if(b64queue == NULL) {
         b64queue = (struct queue_struct *)os_zalloc(sizeof(struct queue_struct));
         b64queue->tsize = 64;
-        b64queue->dequeue = write8;
+        //b64queue->dequeue = write8;
+        b64queue->dequeue = rom_dequeue;
         //b64queue->dequeue = uart_dequeue;
     }
 
@@ -107,33 +142,46 @@ void errr_callback(err_t err) {
 
 
 
-
+bool once = false;
 void some_timerfunc(void *arg) {
-    // reset global variable
-    headers = false;
 
-    // create new httprequest
-    struct httpreq* req = (struct httpreq *)os_zalloc(sizeof(struct httpreq));
+    // request once, redraw forever
+    if(!once) {
+        once = true;
 
-    // set server ip 
-    uint8_t ip[4] = {192, 168, 0, 12};
-    os_memcpy(req->ip, ip, 4); 
+            // reset global variable
+        headers = false;
 
-    // set port
-    req->port = 8088;
+        // create new httprequest
+        struct httpreq* req = (struct httpreq *)os_zalloc(sizeof(struct httpreq));
 
-    // set path to query
-    req->path = "/bitmap?source=imgur"; 
-    //req->path = "/bitmap?source=local&url=blue.png";
+        // set server ip 
+        uint8_t ip[4] = {192, 168, 0, 11};
+        os_memcpy(req->ip, ip, 4); 
 
-    // set response callback
-    req->res_cb = response_callback;
+        // set port
+        req->port = 8088;
 
-    // set error callback
-    req->err_cb = errr_callback;
+        // set path to query
+        req->path = "/bitmap?source=imgur"; 
+        //req->path = "/bitmap?source=local&url=blue.png";
 
-    // send the request
-    httpclient_request(req);
+        // set response callback
+        req->res_cb = response_callback;
+
+        // set error callback
+        req->err_cb = errr_callback;
+
+        // send the request
+        httpclient_request(req);
+    }
+    else {
+        fillScreen(ILI9340_GREEN);
+
+        rom_draw();
+    }
+
+
 }
 
 
@@ -153,7 +201,7 @@ user_init() {
     gpio_init();
 
     // init ili LCD
-    ili_init(true); 
+    ili_init(false); 
 
     // set LCD upside down (easier to dev from my desk, anyway)
     spiCommandData(ILI9340_MADCTL, ILI9340_MADCTL_MY | ILI9340_MADCTL_BGR, 8);
@@ -181,7 +229,7 @@ user_init() {
     // setup timer
     os_timer_setfn(&some_timer, (os_timer_func_t *)some_timerfunc, NULL);
     // arm the timer
-    os_timer_arm(&some_timer, 30000, 1);
+    os_timer_arm(&some_timer, 10000, 1);
 
 
     // start os task
