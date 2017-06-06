@@ -201,10 +201,9 @@ void write8(char* data, uint16_t len) {
 
 
   // copy data to W0-W15 (16 * 32-bit = 64 bytes)
+  // walking the registers backward to avoid bit-shifting four char* (to make a uint32)
   while(spiitr--) {
-
-    // yikes! this needs it's own byteorder set correctly,
-    // but avoids bit-shifting a uint32 from four char*
+    
     WRITE_PERI_REG(SPI_W0(HSPI)+spiptr, *((uint32_t *) dataptr));
 
     dataptr += sizeof(uint32_t);
